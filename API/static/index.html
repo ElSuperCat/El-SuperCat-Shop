@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>TIENDA DE EL SUPER CAT 😼 - MATRIX ULTIMATE</title>
+    <style>
+        @font-face { font-family: 'Determination'; src: url('determination.ttf'); }
+        body, html {
+            background-color: black; color: white; font-family: 'Determination', monospace;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden;
+        }
+        #escenario { width: 1100px; height: 450px; border: 6px solid white; background-image: url('fondo.png'); background-size: cover; position: relative; }
+       
+        /* --- GATO CENTRADO EN EL MEDIO --- */
+        #personaje {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 250px; /* Tamaño del gato */
+        }
+       
+        #interfaz-inferior { display: flex; width: 1112px; height: 280px; margin-top: 10px; }
+        #cuadro-ia { flex: 3; border: 6px solid white; background: black; padding: 25px; display: flex; flex-direction: column; position: relative; box-sizing: border-box; }
+        #chat-log { font-size: 28px; line-height: 1.2; overflow-y: auto; }
+        a { color: #ffff00; text-decoration: none; }
+       
+        #caja-combate { display: none; width: 100%; height: 100%; position: absolute; top: 0; left: 0; background: black; overflow: hidden; }
+        #corazon { width: 50px; height: 50px; background-image: url('corazon_azul.png'); background-size: contain; background-repeat: no-repeat; position: absolute; z-index: 10; }
+       
+        /* HUESOS VERTICALES */
+        .hueso { width: 30px; height: 120px; background-image: url('hueso.png'); background-size: 100% 100%; position: absolute; bottom: 0; }
+       
+        #sprite-blaster { width: 120px; height: 120px; background-image: url('blaster.png'); background-size: contain; background-repeat: no-repeat; position: absolute; right: 20px; display: none; transform: rotate(-270deg); }
+        .aviso-blaster { position: absolute; width: 100%; height: 60px; background: rgba(255,255,255,0.2); display: none; right: 0; }
+        .rayo-blaster { position: absolute; width: 100%; height: 60px; background-image: url('rayo.png'); background-color: white; display: none; box-shadow: 0 0 40px white; right: 0; }
+       
+        /* UI HP */
+        #ui-stats { display: none; flex-direction: column; align-items: flex-start; margin-top: 10px; }
+        #hp-bar-bg { width: 200px; height: 25px; background: #444; position: relative; border: 2px solid white; }
+        #hp-fill { height: 100%; background: #ffff00; position: absolute; left: 0; z-index: 2; }
+        #hp-karma { height: 100%; background: #ff00ff; position: absolute; z-index: 1; }
+        #hp-text { color: white; font-size: 26px; margin-top: 5px; }
+       
+        #menu-lateral { flex: 0.8; border: 6px solid white; background: black; margin-left: 10px; display: flex; flex-direction: column; justify-content: space-around; padding: 20px; box-sizing: border-box; position: relative; }
+        .boton-tienda { background: transparent; color: white; border: none; font-size: 28px; cursor: pointer; text-align: left; font-family: inherit; }
+        .boton-tienda:hover { color: #ffff00; }
+    </style>
+</head>
+<body>
+    <div id="escenario"><img id="personaje" src="gato_tableta.png"></div>
+    <div id="interfaz-inferior">
+        <div id="cuadro-ia">
+            <div id="caja-combate"><div id="aviso-blaster" class="aviso-blaster"></div><div id="rayo-blaster" class="rayo-blaster"></div><div id="sprite-blaster"></div><div id="corazon"></div></div>
+            <div id="chat-log">* BIENVENIDO A LA TIENDA DE LA MATRIX.</div>
+            <input type="text" id="input-ia" style="background:black; color:white; border:3px solid white; font-family:inherit; font-size:24px; margin-top:auto;" placeholder="Escribe..." onkeydown="if(event.key === 'Enter') enviar()">
+        </div>
+        <div id="menu-lateral">
+            <button class="boton-tienda" onclick="entrar('COMPRAR')">COMPRAR</button>
+            <button class="boton-tienda" onclick="entrar('PELIS')">PELIS 🏴‍☠️</button>
+            <button class="boton-tienda" onclick="entrar('JUEGOS')">JUEGOS</button>
+            <div id="ui-stats"><div id="hp-bar-bg"><div id="hp-fill"></div><div id="hp-karma"></div></div><span id="hp-text">92 / 92</span></div>
+            <button id="btn-salir" class="boton-tienda" onclick="animarTrampaSalir()">SALIR</button>
+        </div>
+    </div>
+ 
+<script>
+ 
+
+    let hp = 92, maxHp = 92, karma = 0, enCombate = false;
+    let posX = 400, posY = 235, velX = 0, velY = 0;
+    const gravedad = 0.55, saltoMax = -14, friccion = 0.8;
+    let keys = {};
+ 
+    const sndTienda = new Audio('/static/tienda.flac'),
+          sndBatalla = new Audio('/static/batalla.mp3'),
+          sndDaño = new Audio('/static/daño.mp3'),
+          sndBlaster = new Audio('/static/blaster.mp3');
+
+    sndTienda.loop = true;
+ 
+    function entrar(t) {
+        if(enCombate) return;
+        let frase = "* ¿ACCEDIENDO A MIS ARCHIVOS?";
+        if(t === 'JUEGOS') frase = "* ¿QUERÍAS JUEGOS? AQUÍ LOS TIENES.";
+        if(t === 'PELIS') frase = "* LAS PELIS NO SON GRATIS EN LA MATRIX.";
+        document.getElementById('chat-log').innerHTML = frase;
+
+        setTimeout(() => {
+            sndTienda.pause();
+            sndBatalla.play();
+            document.getElementById('caja-combate').style.display = 'block';
+            document.getElementById('ui-stats').style.display = 'flex';
+            iniciar(t);
+        }, 1200);
+    }
+ 
+    function iniciar(t) {
+        enCombate = true;
+        hp = 92;
+        karma = 0;
+        posX = 400;
+        posY = 235;
+
+        let loop = setInterval(() => {
+            if(!enCombate) clearInterval(loop);
+            updateFisicas();
+            if(karma > 0 && hp > 1.2) {
+                hp -= 0.15;
+                karma -= 0.15;
+                updateUI();
+            }
+            if(hp <= 0) {
+                enCombate = false;
+                location.reload();
+            }
+        }, 20);
+
+        setTimeout(() => { if(enCombate) ganar(t); }, 12000);
+        setInterval(() => { if(enCombate) spawnHueso(); }, 900);
+        setInterval(() => { if(enCombate) spawnBlaster(); }, 5000);
+    }
+ 
+    function ganar(t) {
+        enCombate = false;
+        sndBatalla.pause();
+        sndTienda.play();
+        document.getElementById('caja-combate').style.display = 'none';
+
+        if(t === 'PELIS') {
+            document.getElementById('chat-log').innerHTML =
+            "* ACCESO CONCEDIDO:<br><a href='https://www.emule.es'>- eMule</a><br><a href='https://www3.animeflv.net'>- Anime</a>";
+        } else if(t === 'JUEGOS') {
+            document.getElementById('chat-log').innerHTML =
+            "* JUEGOS DESBLOQUEADOS:<br><a href='https://tlauncher.org'>- Minecraft</a><br><a href='https://elamigos.site'>- ElAmigos</a>";
+        }
+    }
+ 
+    function animarTrampaSalir() {
+        const menu = document.getElementById('menu-lateral');
+        const h = document.createElement('div');
+        h.className = 'hueso';
+        h.style.left = "40px";
+        h.style.bottom = "0px";
+        menu.appendChild(h);
+        sndDaño.play();
+        document.getElementById('chat-log').innerHTML = "* NO PUEDES SALIR.";
+    }
+ 
+    window.onkeydown = (e) => keys[e.key] = true;
+    window.onkeyup = (e) => keys[e.key] = false;
+ 
+    function updateFisicas() {
+        if(keys['ArrowLeft']) velX = -8;
+        else if(keys['ArrowRight']) velX = 8;
+        else velX *= friccion;
+
+        if(keys['ArrowUp'] && posY >= 235) velY = -8;
+        if(keys['ArrowUp'] && velY < 0) velY -= 0.8;
+
+        velY += gravedad;
+        posX += velX;
+        posY += velY;
+
+        if(posX <= 5) posX = 5;
+        if(posX >= 740) posX = 740;
+        if(posY >= 235) { posY = 235; velY = 0; }
+        if(posY <= 5) { posY = 5; velY = 0; }
+
+        document.getElementById('corazon').style.left = posX + 'px';
+        document.getElementById('corazon').style.top = posY + 'px';
+    }
+ 
+    function spawnHueso() {
+        const h = document.createElement('div');
+        h.className = 'hueso';
+        h.style.right = "-100px";
+        document.getElementById('caja-combate').appendChild(h);
+
+        let p = -100;
+        let m = setInterval(() => {
+            p += 9;
+            h.style.right = p + 'px';
+
+            let rc = document.getElementById('corazon').getBoundingClientRect();
+            let rh = h.getBoundingClientRect();
+
+            if (rc.left < rh.right && rc.right > rh.left && rc.bottom > rh.top) {
+                hp -= 1;
+                karma += 2;
+                sndDaño.play();
+                updateUI();
+            }
+
+            if(p > 1000 || !enCombate) {
+                clearInterval(m);
+                h.remove();
+            }
+        }, 20);
+    }
+ 
+    function spawnBlaster() {
+        const b = document.getElementById('sprite-blaster'),
+              a = document.getElementById('aviso-blaster'),
+              r = document.getElementById('rayo-blaster');
+
+        let y = Math.random() * 150;
+        b.style.top = y + "px";
+        b.style.display = "block";
+        a.style.top = y + "px";
+        a.style.display = "block";
+
+        sndBlaster.play();
+
+        setTimeout(() => {
+            a.style.display = "none";
+            r.style.top = y + "px";
+            r.style.display = "block";
+
+            setTimeout(() => {
+                r.style.display = "none";
+                b.style.display = "none";
+            }, 1000);
+        }, 1000);
+    }
+ 
+    function updateUI() {
+        document.getElementById('hp-fill').style.width = (hp / maxHp * 100) + "%";
+        document.getElementById('hp-karma').style.left = (hp / maxHp * 100) + "%";
+        document.getElementById('hp-karma').style.width = (karma / maxHp * 100) + "%";
+        document.getElementById('hp-text').innerHTML =
+        Math.max(0, Math.floor(hp)) + " / " + maxHp;
+    }
+
+    /* ===================== IA CON OLLAMA INTEGRADA ===================== */
+
+    async function enviar() {
+        let input = document.getElementById("input-ia");
+        let texto = input.value.trim();
+        if(!texto) return;
+
+        let chat = document.getElementById("chat-log");
+
+        chat.innerHTML += "<br><span style='color:#00ffff'>TÚ:</span> " + texto;
+
+        try {
+            let response = await fetch("/preguntar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ texto: texto })
+            });
+
+            let data = await response.json();
+
+            if(data.ollama_required){
+                chat.innerHTML += "<br><span style='color:#ffff00'>CORE-X:</span> Necesitas instalar Ollama.";
+                chat.innerHTML += "<br><button onclick='window.open(\"https://ollama.com/download\")'>Descargar Ollama</button>";
+            } else {
+                chat.innerHTML += "<br><span style='color:#ffff00'>CORE-X:</span> " + data.respuesta;
+            }
+
+        } catch (e) {
+            chat.innerHTML += "<br><span style='color:red'>ERROR DE CONEXIÓN</span>";
+        }
+
+        chat.scrollTop = chat.scrollHeight;
+        input.value = "";
+    }
+
+</script>
+
+<script>
+
+
+sndTienda.loop = true;
+
+function entrar(t) {
+    if(enCombate) return;
+    let frase = "* ¿ACCEDIENDO A MIS ARCHIVOS?";
+    if(t === 'JUEGOS') frase = "* ¿QUERÍAS JUEGOS? AQUÍ LOS TIENES.";
+    if(t === 'PELIS') frase = "* LAS PELIS NO SON GRATIS EN LA MATRIX.";
+    document.getElementById('chat-log').innerHTML = frase;
+
+    setTimeout(() => {
+        sndTienda.pause();
+        sndBatalla.play();
+        document.getElementById('caja-combate').style.display = 'block';
+        document.getElementById('ui-stats').style.display = 'flex';
+        iniciar(t);
+    }, 1200);
+}
+
+function iniciar(t) {
+    enCombate = true;
+    hp = 92;
+    karma = 0;
+    posX = 400;
+    posY = 235;
+
+    let loop = setInterval(() => {
+        if(!enCombate) clearInterval(loop);
+        updateFisicas();
+        if(karma > 0 && hp > 1.2) {
+            hp -= 0.15;
+            karma -= 0.15;
+            updateUI();
+        }
+        if(hp <= 0) {
+            enCombate = false;
+            location.reload();
+        }
+    }, 20);
+
+    setTimeout(() => { if(enCombate) ganar(t); }, 12000);
+    setInterval(() => { if(enCombate) spawnHueso(); }, 900);
+    setInterval(() => { if(enCombate) spawnBlaster(); }, 5000);
+}
+
+function ganar(t) {
+    enCombate = false;
+    sndBatalla.pause();
+    sndTienda.play();
+    document.getElementById('caja-combate').style.display = 'none';
+
+    if(t === 'PELIS') {
+        document.getElementById('chat-log').innerHTML =
+        "* ACCESO CONCEDIDO:<br><a href='https://www.emule.es'>- eMule</a><br><a href='https://www3.animeflv.net'>- Anime</a>";
+    } else if(t === 'JUEGOS') {
+        document.getElementById('chat-log').innerHTML =
+        "* JUEGOS DESBLOQUEADOS:<br><a href='https://tlauncher.org'>- Minecraft</a><br><a href='https://elamigos.site'>- ElAmigos</a>";
+    }
+}
+
+window.onkeydown = e => keys[e.key] = true;
+window.onkeyup = e => keys[e.key] = false;
+
+
+function updateUI() {
+    document.getElementById('hp-fill').style.width = (hp / maxHp * 100) + "%";
+    document.getElementById('hp-karma').style.width = (karma / maxHp * 100) + "%";
+    document.getElementById('hp-text').innerHTML =
+    Math.max(0, Math.floor(hp)) + " / " + maxHp;
+}
+
+/* ===== IA ===== */
+
+async function enviar() {
+    const input = document.getElementById("input-ia");
+    const texto = input.value.trim();
+    if(!texto) return;
+
+    const chat = document.getElementById("chat-log");
+    chat.innerHTML += "<br><span style='color:#00ffff'>TÚ:</span> " + texto;
+
+    try {
+        const r = await fetch("/preguntar", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ texto })
+        });
+
+        const data = await r.json();
+
+        if(data.ollama_required){
+            chat.innerHTML += "<br><span style='color:#ff5555'>CORE-X:</span> Ollama no está activo.";
+        } else {
+            chat.innerHTML += "<br><span style='color:#ffff00'>CORE-X:</span> " + data.respuesta;
+        }
+
+    } catch {
+        chat.innerHTML += "<br><span style='color:red'>ERROR DE CONEXIÓN</span>";
+    }
+
+    chat.scrollTop = chat.scrollHeight;
+    input.value = "";
+}
+</script>
